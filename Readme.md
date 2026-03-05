@@ -39,9 +39,7 @@ Music_player_backend
 │   ├── routes          # API routes  
 │   └── utils           # Utility functions  
 │
-├── .env.example        # Environment variables example  
-├── Dockerfile          # Docker configuration  
-├── docker-compose.yml  # Docker compose setup  
+├── .env.example        # Environment variables example   
 ├── index.js            # Application entry point  
 ├── package.json  
 └── README.md  
