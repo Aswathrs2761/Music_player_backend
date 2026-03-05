@@ -88,7 +88,7 @@ export const forgotPassword = async (req, res) => {
         await sendmail(emailId, "You are receiving this email because a request was made to reset the password for your account.", `
             Please click the link below to reset your password:
             
-            http://localhost:5173/ResetPassword/${user._id}/${resetToken}
+           https://musiccom.vercel.app/ResetPassword/${user._id}/${resetToken}
 
             
             IF you did not request a password reset, please ignore this email and your password will remain unchanged.
