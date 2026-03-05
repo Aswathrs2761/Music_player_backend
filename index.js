@@ -21,6 +21,10 @@ app.use('/api/playlist',playlistRouter)
 
 connectDB()
 
+app.get("/", (req, res) => {
+  res.send("Music Player Backend API is running 🎵");
+});
+
 app.listen(port,()=>{
     console.log("app is listening to PORT",port);
 })
