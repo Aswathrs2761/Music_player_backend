@@ -6,33 +6,60 @@ import sendmail from "../utils/mailer.js";
 
 
 
-export const resgisterUser = async (req, res) => {
-    try {
-        const { emailId, userName, password } = req.body
+export const registerUser = async (req, res) => {
+  try {
+    const { emailId, userName, password } = req.body;
 
-        const oldUser = await userModel.findOne({ emailId })
-        if (oldUser) {
-            return res.status(409).send({ success: false, cause: 'email', message: "EmailId is already registered" })
-        }
-
-        const alreadyUsedUserName = await userModel.findOne({ userName })
-        if (alreadyUsedUserName) {
-            return res.status(409).send({ success: false, cause: 'username', message: "Username is already exist" })
-        }
-
-
-        const hashedPassword = await bcrypt.hash(password, 10)
-
-        const newUser = new userModel({ emailId, userName, password: hashedPassword })
-        await newUser.save()
-        res.status(200).send({ success: true, message: "Successfully registered", newUser })
-
+    if (!emailId || !userName || !password) {
+      return res.status(400).send({
+        success: false,
+        message: "All fields are required",
+      });
     }
-    catch (error) {
-        console.log(error);
-        res.status(500).send({ success: false, message: "error in registering" })
+
+    const oldUser = await userModel.findOne({ emailId });
+
+    if (oldUser) {
+      return res.status(409).send({
+        success: false,
+        cause: "email",
+        message: "Email is already registered",
+      });
     }
-}
+
+    const existingUsername = await userModel.findOne({ userName });
+
+    if (existingUsername) {
+      return res.status(409).send({
+        success: false,
+        cause: "username",
+        message: "Username already exists",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = new userModel({
+      emailId,
+      userName,
+      password: hashedPassword,
+    });
+
+    await newUser.save();
+
+    res.status(201).send({
+      success: true,
+      message: "User registered successfully",
+    });
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).send({
+      success: false,
+      message: "Server error while registering",
+    });
+  }
+};
 
 export const loginUser = async (req, res) => {
     try {
