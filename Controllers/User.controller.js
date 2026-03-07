@@ -1,167 +1,220 @@
-import { createToken, verifyResetToken, verifyToken } from "../Middleware/authMiddleware.js";
+import { createToken, verifyResetToken } from "../Middleware/authMiddleware.js";
 import userModel from "../Models/user.Schema.js";
-import bcrypt from 'bcrypt'
-import mongoose from "mongoose";
+import bcrypt from "bcrypt";
 import sendmail from "../utils/mailer.js";
-
-
 
 export const registerUser = async (req, res) => {
   try {
-    const { emailId, userName, password } = req.body;
+
+    let { emailId, userName, password } = req.body;
+
+    emailId = emailId.trim().toLowerCase();   // normalize email
 
     if (!emailId || !userName || !password) {
       return res.status(400).send({
         success: false,
-        message: "All fields are required",
+        message: "All fields are required"
       });
     }
 
-    const oldUser = await userModel.findOne({ emailId });
+    const emailExists = await userModel.findOne({ emailId });
 
-    if (oldUser) {
+    if (emailExists) {
       return res.status(409).send({
-        success: false,
-        cause: "email",
-        message: "Email is already registered",
+        message: "Email already registered"
       });
     }
-
-    const existingUsername = await userModel.findOne({ userName });
-
-    if (existingUsername) {
-      return res.status(409).send({
-        success: false,
-        cause: "username",
-        message: "Username already exists",
-      });
-    }
-
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = new userModel({
       emailId,
       userName,
-      password: hashedPassword,
+      password: hashedPassword
     });
 
     await newUser.save();
 
     res.status(201).send({
       success: true,
-      message: "User registered successfully",
+      message: "User registered successfully"
     });
+
   } catch (error) {
+
+    console.error("Register Error:", error);
+
+    // if (error.code === 11000) {
+    //   return res.status(409).send({
+    //     success: false,
+    //     message: "Email already exists"
+    //   });
+    // }
+
+    res.status(500).send({message: "Server error"});
+  }
+};
+
+
+
+export const loginUser = async (req, res) => {
+
+  try {
+
+    const { emailIdOrUserName, password } = req.body;
+
+    if (!emailIdOrUserName || !password) {
+      return res.status(400).send({
+        success: false,
+        message: "Email/Username and password required"
+      });
+    }
+
+    const user = await userModel.findOne({
+      $or: [
+        { userName: emailIdOrUserName },
+        { emailId: emailIdOrUserName }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).send({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password);
+
+    if (!passwordMatch) {
+      return res.status(401).send({
+        success: false,
+        message: "Incorrect password"
+      });
+    }
+
+    const token = createToken(user._id);
+
+    res.status(200).send({
+      success: true,
+      message: "Login successful",
+      user,
+      token
+    });
+
+  } catch (error) {
+
     console.log(error);
 
     res.status(500).send({
       success: false,
-      message: "Server error while registering",
+      message: "Login failed"
     });
+
   }
 };
 
-export const loginUser = async (req, res) => {
-    try {
-        const { emailIdOrUserName, password } = req.body
-
-        if (!emailIdOrUserName) {
-            return res.status(201).send({ success: false, cause: 'user', message: "Please enter user Id" })
-        }
-
-        if (!password) {
-            return res.status(201).send({ success: false, cause: 'password', message: "Please enter password" })
-
-        }
-
-        const user = await userModel.findOne({
-            $or: [{ userName: emailIdOrUserName }, { emailId: emailIdOrUserName }]
-        })
-
-        if (!user) {
-            return res.status(201).send({ success: false, cause: 'user', message: "user not found" })
-        }
-
-        const passwordMatch = await bcrypt.compare(password, user.password)
-
-        if (!passwordMatch) {
-
-            return res.status(201).send({ success: false, cause: 'password', message: "your password is incorrect" })
-        }
-
-        const token = createToken(user._id)
-
-        res.status(200).send({ success: true, message: "Login successfully", user, token })
-
-    }
-    catch (error) {
-        console.log(error);
-        res.status(500).send({ success: false, message: "error in login" })
-    }
-}
 
 
 export const forgotPassword = async (req, res) => {
-    try {
-        const { emailId } = req.body
 
-        const user = await userModel.findOne({ emailId })
-        
-        if (!user) {
-            return res.status(201).send({ success: false, cause: 'email', message: "EmailId is not registered" })
-        }
+  try {
 
-        const resetToken = createToken(user._id)
-        await sendmail(emailId, "You are receiving this email because a request was made to reset the password for your account.", `
-            Please click the link below to reset your password:
-            
-           https://musiccom.vercel.app/ResetPassword/${user._id}/${resetToken}
+    const { emailId } = req.body;
 
-            
-            IF you did not request a password reset, please ignore this email and your password will remain unchanged.
+    const user = await userModel.findOne({ emailId });
 
-            Thank you,
-            The Support Team`
-        );
-        res.status(200).send({ success: true, message: "Password reset email sent successfully" })
-    }catch (error) {
-        console.log(error);
-        res.status(500).send({ success: false, message: "Error in sending password reset email" })
+    if (!user) {
+      return res.status(404).send({
+        success: false,
+        message: "Email not registered"
+      });
     }
-}
+
+    const resetToken = createToken(user._id);
+
+    await sendmail(
+      emailId,
+      "Password Reset",
+      `
+Click the link below to reset your password:
+
+https://musiccom.vercel.app/ResetPassword/${user._id}/${resetToken}
+`
+    );
+
+    res.status(200).send({
+      success: true,
+      message: "Password reset email sent"
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).send({
+      success: false,
+      message: "Error sending reset email"
+    });
+
+  }
+};
+
+
 
 export const resetPassword = async (req, res) => {
-    try {
-        const { password } = req.body
-        const { userId , token } = req.params
 
-        if (!password) {
-            return res.status(201).send({ success: false, cause: 'password', message: "Please enter password" })   
-        }
+  try {
 
-        let decoded
-        try {
-            decoded = verifyResetToken(token)
-        }
-        catch (error) {
-            return res.status(201).send({ success: false, cause: 'token', message: "Invalid or expired token" })
-        }
-        
-        if (decoded.id !== userId) {
-            return res.status(201).send({ success: false, cause: 'token', message: "Invalid token" })
-        }
+    const { password } = req.body;
+    const { userId, token } = req.params;
 
-        const hashedPassword = await bcrypt.hash(password, 10)
-        
-        await userModel.findByIdAndUpdate(userId, { password: hashedPassword })
-
-        res.status(200).send({ success: true, message: "Password reset successfully" })
-    }catch (error) {
-        console.log(error);
-        res.status(500).send({ success: false, message: "Error in resetting password" })
+    if (!password) {
+      return res.status(400).send({
+        success: false,
+        message: "Password required"
+      });
     }
-}
-        
+
+    let decoded;
+
+    try {
+      decoded = verifyResetToken(token);
+    } catch {
+      return res.status(401).send({
+        success: false,
+        message: "Invalid or expired token"
+      });
+    }
+
+    if (decoded.id !== userId) {
+      return res.status(401).send({
+        success: false,
+        message: "Invalid token"
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await userModel.findByIdAndUpdate(userId, {
+      password: hashedPassword
+    });
+
+    res.status(200).send({
+      success: true,
+      message: "Password reset successful"
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).send({
+      success: false,
+      message: "Reset password failed"
+    });
+
+  }
+};  
 
 // export const getAllUsers = async(req,res) =>{
 //     try 
